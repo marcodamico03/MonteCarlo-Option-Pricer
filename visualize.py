@@ -30,7 +30,7 @@ def plot_paths():
     plt.legend()
     plt.grid(True, alpha=0.3)
     
-    print("Graph generated! Check the popup window.")
+    print("Graph generated!")
     plt.show()
 
 if __name__ == "__main__":

@@ -11,7 +11,7 @@ def ensure_output_folder():
         os.makedirs('output')
 
 def plot_convergence(bs_price):
-    print("   -> Generating Convergence Plot (this takes a moment)...")
+    print("Generating Convergence Plot...")
     sim_steps = range(1000, 51000, 2000)
     errors_naive = []
     errors_smart = []
@@ -40,7 +40,7 @@ def plot_convergence(bs_price):
     plt.close()
 
 def plot_payoff_histogram():
-    print("   -> Generating Payoff Histogram...")
+    print("Generating Payoff Histogram...")
     mc = MonteCarloEngine(settings.S0, settings.K, settings.T, settings.R, settings.SIGMA, simulations=50000)
     payoffs = mc.get_payoff_distribution()
     
@@ -56,7 +56,7 @@ def plot_payoff_histogram():
     plt.close()
 
 def plot_paths():
-    print("   -> Generating Price Paths Visualization...")
+    print("Generating Price Paths Visualization...")
     mc = MonteCarloEngine(settings.S0, settings.K, settings.T, settings.R, settings.SIGMA, simulations=100)
     paths = mc.simulate_full_paths(steps=252)
 
@@ -85,33 +85,33 @@ if __name__ == "__main__":
     # 2. Final Price Check (The Analysis you wanted!)
     print(f"\n[2] FINAL SIMULATION ({settings.N_SIMULATIONS} scenarios)")
     mc = MonteCarloEngine(settings.S0, settings.K, settings.T, settings.R, settings.SIGMA, settings.N_SIMULATIONS)
-    
-    # Naive Run
+
+    # Simple Run
     np.random.seed(settings.SEED)
-    p_naive = mc.price_call_option(antithetic=False)
-    err_naive = abs(p_naive - bs_price)
+    p_simple = mc.price_call_option(antithetic=False)
+    err_simple = abs(p_simple - bs_price)
     
-    # Smart Run
+    # Antithetic Run
     np.random.seed(settings.SEED)
-    p_smart = mc.price_call_option(antithetic=True)
-    err_smart = abs(p_smart - bs_price)
+    p_Antithetic = mc.price_call_option(antithetic=True)
+    err_Antithetic = abs(p_Antithetic - bs_price)
     
-    print(f"    Naive Monte Carlo Price: ${p_naive:.4f} (Error: {err_naive:.4f})")
-    print(f"    Smart Monte Carlo Price: ${p_smart:.4f} (Error: {err_smart:.4f})")
+    print(f"    Simple Monte Carlo Price: ${p_simple:.4f} (Error: {err_simple:.4f})")
+    print(f"    Antithetic Monte Carlo Price: ${p_Antithetic:.4f} (Error: {err_Antithetic:.4f})")
     
-    if err_smart < err_naive:
-        print(f"    -> SUCCESS: Smart method reduced error by {(err_naive/err_smart):.1f}x")
+    if err_Antithetic < err_simple:
+        print(f"SUCCESS: Antithetic method reduced error by {(err_simple/err_Antithetic):.1f}x")
 
     # 3. Graphs
     print("\n[3] GENERATING GRAPHS...")
     plot_convergence(bs_price)
-    print("    [+] Convergence plot saved.")
+    print("Convergence plot saved.")
     
     plot_payoff_histogram()
-    print("    [+] Histogram saved.")
+    print("Histogram saved.")
 
     plot_paths()
-    print("    [+] Paths plot saved.")
+    print("Paths plot saved.")
     
     print("\n" + "="*60)
     print("PROJECT COMPLETED. CHECK 'OUTPUT' FOLDER.")
