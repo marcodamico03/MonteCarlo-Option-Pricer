@@ -102,6 +102,18 @@ if __name__ == "__main__":
     if err_Antithetic < err_simple:
         print(f"SUCCESS: Antithetic method reduced error by {(err_simple/err_Antithetic):.1f}x")
 
+    print("-" * 60)
+    print("REAL WORLD APPLICATION: EXOTIC PRICING (ASIAN OPTION)")
+    print("-" * 60)
+    
+    # Prezzo Asiatica
+    np.random.seed(settings.SEED)
+    p_asian = mc.price_asian_option(antithetic=True)
+    
+    print(f"    Asian Option Price:           ${p_asian:.4f}")
+    print(f"    European Option Price:        ${p_Antithetic:.4f}")
+    print(f"    -> Insight: Asian options are cheaper because averaging reduces volatility.")
+
     # 3. Graphs
     print("\n[3] GENERATING GRAPHS...")
     plot_convergence(bs_price)
