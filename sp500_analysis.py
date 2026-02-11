@@ -4,111 +4,173 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime
+from scipy.optimize import brentq
+from scipy.stats import norm
 from models.monte_carlo import MonteCarloEngine
+from models.volatility import get_ewma_volatility
 
-# Representative list of major S&P 500 sectors
+# Top S&P 500 Stocks
 TICKERS = [
-    "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "TSLA", "META", # Tech
-    "JPM", "BAC", "V",       # Finance
-    "JNJ", "PFE",            # Healthcare
-    "XOM", "CVX",            # Energy
-    "KO", "PEP",             # Consumer
-    "WMT", "COST"            # Retail
+    "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "TSLA", "META",
+    "JPM", "BAC", "V", "JNJ", "PFE", "XOM", "CVX", "KO", "PEP", "WMT", "COST"
 ]
 
-def get_data_and_price(ticker):
+# --- HELPER: BS SOLVER FOR IMPLIED VOLATILITY ---
+def bs_price(S, K, T, r, sigma):
+    d1 = (np.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * np.sqrt(T))
+    d2 = d1 - sigma * np.sqrt(T)
+    return S * norm.cdf(d1) - K * np.exp(-r * T) * norm.cdf(d2)
+
+def solve_implied_volatility(market_price, S0, K, T, r):
+    def objective(sigma):
+        return bs_price(S0, K, T, r, sigma) - market_price
     try:
-        # 1. Historical Volatility
+        return brentq(objective, 0.001, 5.0) 
+    except:
+        return np.nan
+
+# --- MAIN ANALYSIS LOGIC ---
+def analyze_stock(ticker):
+    try:
         stock = yf.Ticker(ticker)
+        
+        # 1. Get Data
         hist = stock.history(period="1y")
         if len(hist) < 200: return None
-        
-        rets = np.log(hist['Close'] / hist['Close'].shift(1))
-        sigma = rets.std() * np.sqrt(252)
         s0 = hist['Close'].iloc[-1]
         
-        # 2. Find Option (~30 days out)
+        # 2. Calculate Volatilities
+        # A. Historical
+        rets = np.log(hist['Close'] / hist['Close'].shift(1))
+        vol_hist = rets.std() * np.sqrt(252)
+        
+        # B. EWMA
+        vol_ewma = get_ewma_volatility(hist['Close'])
+
+        # 3. Get Option Data
         expirations = stock.options
         if not expirations: return None
         
         target_date = None
-        days_to_maturity = 0
         for date in expirations:
             d = (datetime.strptime(date, "%Y-%m-%d") - datetime.now()).days
-            if 20 < d < 50:
+            if 20 < d < 60:
                 target_date = date
-                days_to_maturity = d
+                days = d
                 break
-        
         if not target_date: return None
 
-        # 3. ATM Option Price
         chain = stock.option_chain(target_date).calls
-        closest_idx = (np.abs(chain['strike'] - s0)).argmin()
-        row = chain.iloc[closest_idx]
+        closest = chain.iloc[(np.abs(chain['strike'] - s0)).argmin()]
+        K = closest['strike']
+        market_price = (closest['bid'] + closest['ask']) / 2
+        if market_price == 0: market_price = closest['lastPrice']
         
-        K = row['strike']
-        market_price = (row['bid'] + row['ask']) / 2
-        if market_price == 0: market_price = row['lastPrice']
+        # C. Implied Volatility
+        T = days / 365.0
+        r = 0.045
+        vol_implied = solve_implied_volatility(market_price, s0, K, T, r)
+        if np.isnan(vol_implied): vol_implied = vol_hist
+
+        # 4. Calculate Prices
+        mc1 = MonteCarloEngine(s0, K, T, r, vol_hist, 20000)
+        p_hist = mc1.price_call_option(antithetic=True)
         
-        # 4. Pricing
-        T = days_to_maturity / 365.0
-        r = 0.045 
-        mc = MonteCarloEngine(s0, K, T, r, sigma, simulations=20000)
-        model_price = mc.price_call_option(antithetic=True)
-        
+        mc2 = MonteCarloEngine(s0, K, T, r, vol_ewma, 20000)
+        p_ewma = mc2.price_call_option(antithetic=True)
+
         return {
             "Ticker": ticker,
-            "Sigma_Hist": sigma,
+            # Prices
             "Market_Price": market_price,
-            "Model_Price": model_price,
-            "Diff_Pct": (model_price - market_price) / market_price * 100
+            "Price_Hist": p_hist,
+            "Price_EWMA": p_ewma,
+            "Err_Hist_$": p_hist - market_price,
+            "Err_Hist_%": (p_hist - market_price) / market_price * 100,
+            "Err_EWMA_$": p_ewma - market_price,
+            "Err_EWMA_%": (p_ewma - market_price) / market_price * 100,
+            # Volatilities
+            "Vol_Implied": vol_implied,
+            "Vol_Hist": vol_hist,
+            "Vol_EWMA": vol_ewma,
+            "Vol_Err_Hist_N": vol_hist - vol_implied, # Diff in points
+            "Vol_Err_Hist_P": (vol_hist - vol_implied) / vol_implied * 100,
+            "Vol_Err_EWMA_N": vol_ewma - vol_implied,
+            "Vol_Err_EWMA_P": (vol_ewma - vol_implied) / vol_implied * 100,
         }
-    except:
+    except Exception as e:
         return None
 
 def run_sector_analysis():
-    print(f"--- RUNNING S&P 500 SECTOR SCAN ({len(TICKERS)} Stocks) ---")
-    results = []
-    
-    for i, t in enumerate(TICKERS):
-        print(f"   Processing [{i+1}/{len(TICKERS)}] {t}...", end="\r")
-        res = get_data_and_price(t)
-        if res: results.append(res)
+    print(f"--- S&P 500 FINAL ANALYSIS: PRICES & ERRORS ---")
+    data = []
+    for t in TICKERS:
+        print(f"Processing {t}...", end="\r")
+        res = analyze_stock(t)
+        if res: data.append(res)
             
-    print(f"\n   Analysis Complete. Generating Report...")
+    df = pd.DataFrame(data)
+    pd.options.display.float_format = '{:.2f}'.format
     
-    # Create DataFrame
-    df = pd.DataFrame(results)
+    # --- TABLE 1: PRICES & ERRORS ---
+    print("\n\n" + "="*100)
+    print(" TABLE 1: PRICING ACCURACY ($ and %)")
+    print("="*100)
     
-    # Calculate Absolute Difference ($)
-    df['Diff_Abs'] = df['Model_Price'] - df['Market_Price']
+    # Rename for cleaner printing
+    t1 = df[['Ticker', 'Market_Price', 'Price_Hist', 'Price_EWMA', 
+             'Err_Hist_$', 'Err_Hist_%', 'Err_EWMA_$', 'Err_EWMA_%']].copy()
+    t1.columns = ['Ticker', 'Mkt $', 'Hist $', 'EWMA $', 
+                  'Hist Err $', 'Hist Err %', 'EWMA Err $', 'EWMA Err %']
     
-    # Select and Rename columns for the Table
-    table_view = df[['Ticker', 'Model_Price', 'Market_Price', 'Diff_Abs', 'Diff_Pct']].copy()
-    table_view.columns = ['Ticker', 'Model ($)', 'Market ($)', 'Diff ($)', 'Diff (%)']
-    
-    # Print the Table formatted cleanly
-    print("\n" + "="*65)
-    print("S&P 500 PRICING REPORT (Model vs Market)")
-    print("="*65)
-    # This prints the table without the index number, rounded to 2 decimals
-    print(table_view.to_string(index=False, float_format=lambda x: "{:.2f}".format(x)))
-    print("="*65 + "\n")
+    print(t1.to_string(index=False))
 
-    # --- Generate the Scatter Plot (Same as before) ---
-    plt.figure(figsize=(10, 6))
-    colors = ['red' if x < 0 else 'green' for x in df['Diff_Pct']]
-    plt.scatter(df['Sigma_Hist'], df['Diff_Pct'], c=colors, s=100, alpha=0.7, edgecolors='black')
+    # --- TABLE 2: VOLATILITY & ERRORS ---
+    print("\n\n" + "="*100)
+    print(" TABLE 2: VOLATILITY ACCURACY (Number and %)")
+    print("="*100)
     
-    for i, txt in enumerate(df['Ticker']):
-        plt.annotate(txt, (df['Sigma_Hist'].iloc[i], df['Diff_Pct'].iloc[i]), xytext=(5,5), textcoords='offset points')
+    t2 = df[['Ticker', 'Vol_Implied', 'Vol_Hist', 'Vol_EWMA', 
+             'Vol_Err_Hist_N', 'Vol_Err_Hist_P', 'Vol_Err_EWMA_N', 'Vol_Err_EWMA_P']].copy()
+    
+    # Convert to percentage points for display (0.20 -> 20.0)
+    for col in ['Vol_Implied', 'Vol_Hist', 'Vol_EWMA', 'Vol_Err_Hist_N', 'Vol_Err_EWMA_N']:
+        t2[col] = t2[col] * 100
         
-    plt.axhline(0, color='black', linestyle='--')
-    plt.title('Monte Carlo vs Market Prices: The Volatility Premium')
-    plt.xlabel('Historical Volatility (1 Year)')
-    plt.ylabel('Model Deviation from Market (%)')
+    t2.columns = ['Ticker', 'Imp Vol', 'Hist Vol', 'EWMA Vol', 
+                  'Hist Diff', 'Hist Err %', 'EWMA Diff', 'EWMA Err %']
+    
+    print(t2.to_string(index=False))
+
+    # --- FINAL SCORECARD (AVERAGES) ---
+    avg_hist_err = df['Err_Hist_%'].abs().mean()
+    avg_ewma_err = df['Err_EWMA_%'].abs().mean()
+    
+    print("\n\n" + "="*50)
+    print(" FINAL SCORECARD (AVERAGE ABSOLUTE ERROR)")
+    print("="*50)
+    print(f" 1. Historical Model Avg Error:  {avg_hist_err:.2f}%")
+    print(f" 2. EWMA (Smart) Model Avg Error: {avg_ewma_err:.2f}%")
+    
+    if avg_ewma_err < avg_hist_err:
+        print(f" -> WINNER: EWMA Model is {avg_hist_err/avg_ewma_err:.1f}x more accurate.")
+    else:
+        print(f" -> WINNER: Historical Model (Market is behaving normally).")
+    print("="*50)
+
+    # Save Graph
+    plt.figure(figsize=(12, 6))
+    x = np.arange(len(df))
+    w = 0.35
+    plt.bar(x - w/2, df['Err_Hist_%'].abs(), w, label='Hist Error %', color='red', alpha=0.6)
+    plt.bar(x + w/2, df['Err_EWMA_%'].abs(), w, label='EWMA Error %', color='blue', alpha=0.6)
+    plt.title('Final Accuracy Battle: Historical vs EWMA')
+    plt.ylabel('Absolute Price Error (%)')
+    plt.xticks(x, df['Ticker'])
+    plt.legend()
     plt.grid(True, alpha=0.3)
-    plt.savefig('output/4_sp500_analysis.png')
-    plt.close()
-    print("   [+] Scatter plot saved to output/4_sp500_analysis.png")
+    plt.savefig('output/5_final_scorecard.png')
+    print("\n[+] Final Scorecard Graph saved to output/5_final_scorecard.png")
+
+if __name__ == "__main__":
+    run_sector_analysis()
