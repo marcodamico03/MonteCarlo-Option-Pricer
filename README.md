@@ -6,6 +6,34 @@ Designed to demonstrate the gap between theoretical models (Black-Scholes) and r
 
 ---
 
+## Methodology
+
+### Monte Carlo Simulation
+We model the stock price evolution using **Geometric Brownian Motion (GBM)**:
+
+$$dS_t = \mu S_t dt + \sigma S_t dW_t$$
+
+Where $dW_t$ is a Wiener process. We simulate thousands of paths to approximate the expected payoff at maturity.
+
+### Volatility Models
+* **Historical:** Standard deviation of log returns (backward-looking).
+* **EWMA (RiskMetrics):** Exponentially Weighted Moving Average. Gives more weight to recent events ($\lambda = 0.94$), making it more responsive to market crashes.
+* **Implied:** Reverse-engineered from market option prices using a numerical solver (Brent's method).
+
+---
+
+## Sample Outputs
+
+**1. Convergence Analysis:**
+Demonstrates how Antithetic Variates reduce error compared to simple Monte Carlo.
+*(See `output/1_convergence_plot.png` after running)*
+
+**2. The Fear Gauge (Risk Premium):**
+Visualizes the difference between Market Implied Volatility and Statistical (EWMA) Volatility.
+*(See `output/8_risk_premium.png` after running)*
+
+---
+
 ## Key Features
 
 ### 1. Pricing Engine
@@ -74,32 +102,6 @@ python main.py
 ├── settings.py             # Global simulation parameters (Sims, Steps, Seed)
 └── README.md               # Project documentation
 ```
-
-## Methodology
-
-### Monte Carlo Simulation
-We model the stock price evolution using **Geometric Brownian Motion (GBM)**:
-
-$$dS_t = \mu S_t dt + \sigma S_t dW_t$$
-
-Where $dW_t$ is a Wiener process. We simulate thousands of paths to approximate the expected payoff at maturity.
-
-### Volatility Models
-* **Historical:** Standard deviation of log returns (backward-looking).
-* **EWMA (RiskMetrics):** Exponentially Weighted Moving Average. Gives more weight to recent events ($\lambda = 0.94$), making it more responsive to market crashes.
-* **Implied:** Reverse-engineered from market option prices using a numerical solver (Brent's method).
-
----
-
-## Sample Outputs
-
-**1. Convergence Analysis:**
-Demonstrates how Antithetic Variates reduce error compared to simple Monte Carlo.
-*(See `output/1_convergence_plot.png` after running)*
-
-**2. The Fear Gauge (Risk Premium):**
-Visualizes the difference between Market Implied Volatility and Statistical (EWMA) Volatility.
-*(See `output/8_risk_premium.png` after running)*
 
 ---
 
