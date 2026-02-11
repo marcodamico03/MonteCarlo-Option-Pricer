@@ -163,7 +163,7 @@ def run_sector_analysis():
     plt.xticks(x, df['Ticker'])
     plt.legend()
     plt.grid(True, alpha=0.3)
-    plt.savefig('output/7_model_battle.png')
+    plt.savefig('output/4_model_battle.png')
     
     # --- GRAPH 2: RISK PREMIUM ---
     plt.figure(figsize=(12, 6))
@@ -173,9 +173,9 @@ def run_sector_analysis():
     plt.title(f'The Fear Gauge: Implied Volatility vs {winner} Volatility')
     plt.ylabel('Risk Premium (Points)')
     plt.grid(True, alpha=0.3)
-    plt.savefig('output/8_risk_premium.png')
+    plt.savefig('output/5_risk_premium.png')
     
-    print("\n[+] Saved graphs to output/7_model_battle.png and output/8_risk_premium.png")
+    print("\n[+] Saved graphs to output/4_model_battle.png and output/5_risk_premium.png")
 
 if __name__ == "__main__":
     run_sector_analysis()
