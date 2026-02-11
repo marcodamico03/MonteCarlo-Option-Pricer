@@ -68,13 +68,13 @@ By comparing our **EWMA (Adaptive)** model against **Market Implied Volatility**
 
 1.  **Clone the repository:**
     ```bash
-    git clone [https://github.com/marcodamico03/MonteCarlo-Option-Pricer]
+    git clone https://github.com/marcodamico03/MonteCarlo-Option-Pricer
     cd MonteCarlo-Option-Pricer
     ```
 
 2.  **Install dependencies:**
     ```bash
-    pip install numpy pandas matplotlib yfinance scipy
+    pip install -r requirements.txt
     ```
 
 ---
@@ -96,7 +96,7 @@ python main.py
 
 ---
 
-## 📊 Project Structure
+## Project Structure
 
 ```text
 ├── models/
